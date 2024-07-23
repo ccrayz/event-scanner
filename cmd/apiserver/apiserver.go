@@ -1,7 +1,9 @@
 package apiserver
 
 import (
+	"ccrayz/event-scanner/internal/indexer"
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -44,10 +46,20 @@ func NewCommand() *cobra.Command {
 				}
 			}()
 
+			schedule := "@every 2s"
+			indexer := indexer.NewIndexer(schedule)
+			go func() {
+				indexer.Run()
+				fmt.Println("Indexer started")
+			}()
+
 			quit := make(chan os.Signal, 1)
 			signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 			<-quit
 			log.Println("Shutdown Server ...")
+
+			log.Println("Shutdown Indexer ...")
+			indexer.Stop()
 
 			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(terminateSeconds)*time.Second)
 			defer cancel()

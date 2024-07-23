@@ -8,3 +8,5 @@ ui/dist/app/*
 site/
 *.iml
 *.log
+.restclient/
+test.db
