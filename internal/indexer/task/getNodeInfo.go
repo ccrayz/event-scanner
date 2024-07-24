@@ -4,6 +4,7 @@ import (
 	"ccrayz/event-scanner/internal/http"
 	"context"
 	"log"
+	"os"
 )
 
 type GetNodeInfo struct{}
@@ -11,22 +12,13 @@ type GetNodeInfo struct{}
 type ResponseData struct {
 	jsonrpc string `json:jsonrpc`
 	id      int    `json:id`
-	// result  Result `json:result`
 }
-
-// type Result struct {
-// 	TotalConnected int               `json:"totalConnected"`
-// 	Peers          []models.PeerInfo `json:"peers"`
-// 	bannedPeers    []string          `json:"bannedPeers"`
-// 	bannedIPS      []string          `json:"bannedIPS"`
-// 	bannedSubnets  []string          `json:"bannedSubnets"`
-// }
 
 func (t GetNodeInfo) Do() {
 	ctx := context.Background()
 	log.Println("Running GetNodeInfo")
 
-	baseURL := ""
+	baseURL := os.Getenv("API_SERVER_URL")
 	client := http.NewClient(baseURL)
 	req, err := client.NewRequest("POST", "", map[string]interface{}{
 		"jsonrpc": "2.0",

@@ -14,7 +14,7 @@ type Indexer struct {
 	tasks    []Task
 }
 
-func NewIndexer(schedule string) *Indexer {
+func NewIndexer(schedule string, ) *Indexer {
 	tasks := []Task{SampleTask{}, task.GetNodeInfo{}}
 	c := cron.New()
 	return &Indexer{
