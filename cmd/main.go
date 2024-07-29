@@ -8,6 +8,7 @@ import (
 
 	"ccrayz/event-scanner/cmd/apiserver"
 	"ccrayz/event-scanner/config"
+	"ccrayz/event-scanner/internal/indexer"
 	"ccrayz/event-scanner/internal/indexer/models"
 
 	"gorm.io/driver/postgres"
@@ -18,11 +19,11 @@ import (
 var command *cobra.Command
 
 type App struct {
-	DB *gorm.DB
+	IndexerDB *gorm.DB
 }
 
 func (a *App) Migrate() {
-	if err := models.Migrate(a.DB); err != nil {
+	if err := models.Migrate(a.IndexerDB); err != nil {
 		log.Fatalf("Failed to indexer migrate database: %v", err)
 	}
 }
@@ -63,13 +64,24 @@ func main() {
 
 	db := initDB(cfg)
 	app := &App{
-		DB: db,
+		IndexerDB: db,
 	}
 	app.Migrate()
 
+	schedule := "@every 2s"
+	log.Println(app.IndexerDB)
+	indexer := indexer.NewIndexer(schedule, app.IndexerDB)
+	go func() {
+		indexer.Run()
+		fmt.Println("Indexer started")
+	}()
 	command = apiserver.NewCommand()
 
 	if err := command.Execute(); err != nil {
 		panic(err)
 	}
+
+	log.Println("Shutdown Indexer ...")
+	indexer.Stop()
+	log.Println("Indexer exiting")
 }

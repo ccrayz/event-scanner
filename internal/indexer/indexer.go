@@ -6,6 +6,7 @@ import (
 	"ccrayz/event-scanner/internal/indexer/task"
 
 	"github.com/robfig/cron"
+	"gorm.io/gorm"
 )
 
 type Indexer struct {
@@ -14,14 +15,21 @@ type Indexer struct {
 	tasks    []Task
 }
 
-func NewIndexer(schedule string, ) *Indexer {
+func NewIndexer(schedule string, db *gorm.DB) *Indexer {
+	log.Println(db)
 	tasks := []Task{SampleTask{}, task.GetNodeInfo{}}
 	c := cron.New()
-	return &Indexer{
+	indexer := &Indexer{
 		cron:     c,
 		schedule: schedule,
 		tasks:    tasks,
 	}
+
+	for _, task := range indexer.tasks {
+		task.SetDB(db)
+	}
+
+	return indexer
 }
 
 func (i *Indexer) Run() {
@@ -43,10 +51,17 @@ func (i *Indexer) Stop() {
 
 type Task interface {
 	Do()
+	SetDB(db *gorm.DB)
 }
 
-type SampleTask struct{}
+type SampleTask struct {
+	db *gorm.DB
+}
 
 func (t SampleTask) Do() {
 	log.Println("Running SampleTask")
+}
+
+func (t SampleTask) SetDB(db *gorm.DB) {
+	t.db = db
 }

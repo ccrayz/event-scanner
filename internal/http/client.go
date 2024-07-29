@@ -2,7 +2,6 @@ package http
 
 import (
 	"bytes"
-	"ccrayz/event-scanner/internal/indexer/models"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -19,23 +18,6 @@ const (
 type Client struct {
 	baseURL string
 	client  *http.Client
-}
-
-type ErrorResponse struct {
-	Body     []byte
-	Response *http.Response
-	Message  string
-}
-
-type ResponseData struct {
-	jsonrpc string `json:jsonrpc`
-	id      int    `json:id`
-	result  Result `json:result`
-}
-
-type Result struct {
-	TotalConnected int `json:"totalConnected"`
-	Peers          []models.PeerInfo
 }
 
 func NewClient(baseURL string) *Client {
@@ -77,9 +59,6 @@ func (c *Client) NewRequest(method, path string, body interface{}) (*http.Reques
 
 func (c *Client) Do(ctx context.Context, req *http.Request, v interface{}) (*http.Response, error) {
 	req = req.WithContext(ctx)
-	println(req.Method)
-	println(req.URL.String())
-	println(req.Body)
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -90,25 +69,15 @@ func (c *Client) Do(ctx context.Context, req *http.Request, v interface{}) (*htt
 		return resp, err
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return resp, err
+	buf := new(bytes.Buffer)
+	teeReader := io.TeeReader(resp.Body, buf)
+	decErr := json.NewDecoder(teeReader).Decode(v)
+	if decErr == io.EOF {
+		decErr = nil
 	}
-	err = json.Unmarshal(body, v)
-	if err != nil {
-		fmt.Errorf("failed to unmarshal as rpcResponse: %w", err)
+	if decErr != nil {
+		err = fmt.Errorf("%s: %s", decErr.Error(), buf.String())
 	}
-
-	// TODO(ccrayz): 이부분을 해결해야함
-	// buf := new(bytes.Buffer)
-	// teeReader := io.TeeReader(resp.Body, buf)
-	// decErr := json.NewDecoder(teeReader).Decode(v)
-	// if decErr == io.EOF {
-	// 	decErr = nil
-	// }
-	// if decErr != nil {
-	// 	err = fmt.Errorf("%s: %s", decErr.Error(), buf.String())
-	// }
 
 	return resp, err
 }
