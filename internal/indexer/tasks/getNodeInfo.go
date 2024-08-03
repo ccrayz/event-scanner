@@ -1,10 +1,10 @@
-package task
+package tasks
 
 import (
+	"ccrayz/event-scanner/internal/db"
 	"ccrayz/event-scanner/internal/http"
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"os"
 	"time"
@@ -13,12 +13,9 @@ import (
 
 	"github.com/ethereum-optimism/optimism/op-node/p2p"
 	"gorm.io/datatypes"
-	"gorm.io/gorm"
 )
 
-type GetNodeInfo struct {
-	db *gorm.DB
-}
+type GetNodeInfo struct{}
 
 type ResponseData struct {
 	JsonRpc string          `json:"jsonrpc"`
@@ -26,14 +23,7 @@ type ResponseData struct {
 	Result  json.RawMessage `json:"result"`
 }
 
-func (t GetNodeInfo) SetDB(db *gorm.DB) {
-	log.Println("Setting DB")
-	log.Println(db)
-	t.db = db
-	log.Println(t.db)
-}
-
-func (t GetNodeInfo) Do() {
+func (t GetNodeInfo) Do(appDB *db.AppDB) {
 	ctx := context.Background()
 	log.Println("Running GetNodeInfo")
 
@@ -59,22 +49,18 @@ func (t GetNodeInfo) Do() {
 
 	var peerDump p2p.PeerDump
 	_ = json.Unmarshal(data.Result, &peerDump)
-	log.Printf("Total connected peers: %d", peerDump.TotalConnected)
-	// for id, peer := range peerDump.Peers {
-	// 	log.Printf("Peer %s: %s", id, peer.PeerID)
-	// }
 
-	log.Println("Saving peer history")
-	fmt.Println(t.db)
+	collectedAt := time.Now().UTC().Format("2006-01-02 15:04:05")
+	log.Printf("collected time [%s] total peers [%d]", collectedAt, peerDump.TotalConnected)
+
 	peerHistory := models.PeerHistory{
-		CollectedAt: datatypes.JSON(time.Now().Format(time.RFC3339)),
+		CollectedAt: datatypes.JSON(collectedAt),
 		PeerIDs:     getPeerIDs(peerDump.Peers),
 		NodeIDs:     getNodeIDs(peerDump.Peers),
 		Addresses:   getAddresses(peerDump.Peers),
 	}
 
-	log.Println(t.db)
-	if err := t.db.Create(&peerHistory).Error; err != nil {
+	if err := appDB.DB.Create(&peerHistory).Error; err != nil {
 		log.Fatalf("Failed to save peer history: %v", err)
 	}
 }

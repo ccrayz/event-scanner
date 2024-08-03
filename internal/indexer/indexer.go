@@ -1,12 +1,11 @@
 package indexer
 
 import (
+	"ccrayz/event-scanner/internal/db"
+	"ccrayz/event-scanner/internal/indexer/tasks"
 	"log"
 
-	"ccrayz/event-scanner/internal/indexer/task"
-
 	"github.com/robfig/cron"
-	"gorm.io/gorm"
 )
 
 type Indexer struct {
@@ -15,9 +14,12 @@ type Indexer struct {
 	tasks    []Task
 }
 
-func NewIndexer(schedule string, db *gorm.DB) *Indexer {
-	log.Println(db)
-	tasks := []Task{SampleTask{}, task.GetNodeInfo{}}
+type Task interface {
+	Do(db *db.AppDB)
+}
+
+func NewIndexer(schedule string) *Indexer {
+	tasks := []Task{tasks.GetNodeInfo{}}
 	c := cron.New()
 	indexer := &Indexer{
 		cron:     c,
@@ -25,18 +27,14 @@ func NewIndexer(schedule string, db *gorm.DB) *Indexer {
 		tasks:    tasks,
 	}
 
-	for _, task := range indexer.tasks {
-		task.SetDB(db)
-	}
-
 	return indexer
 }
 
-func (i *Indexer) Run() {
+func (i *Indexer) Run(db *db.AppDB) {
 	log.Printf("Running indexer with schedule %s", i.schedule)
 
 	for _, task := range i.tasks {
-		err := i.cron.AddFunc(i.schedule, task.Do)
+		err := i.cron.AddFunc(i.schedule, func() { task.Do(db) })
 		if err != nil {
 			log.Fatalf("Failed to add task to cron: %v", err)
 		}
@@ -49,19 +47,6 @@ func (i *Indexer) Stop() {
 	i.cron.Stop()
 }
 
-type Task interface {
-	Do()
-	SetDB(db *gorm.DB)
-}
-
-type SampleTask struct {
-	db *gorm.DB
-}
-
-func (t SampleTask) Do() {
-	log.Println("Running SampleTask")
-}
-
-func (t SampleTask) SetDB(db *gorm.DB) {
-	t.db = db
+func (i *Indexer) AddTask(task Task) {
+	i.tasks = append(i.tasks, task)
 }
