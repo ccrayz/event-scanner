@@ -32,9 +32,11 @@ func NewIndexer(schedule string) *Indexer {
 
 func (i *Indexer) Run(db *db.AppDB) {
 	log.Printf("Running indexer with schedule %s", i.schedule)
-
 	for _, task := range i.tasks {
-		err := i.cron.AddFunc(i.schedule, func() { task.Do(db) })
+
+		err := i.cron.AddFunc(i.schedule, func() {
+			task.Do(db)
+		})
 		if err != nil {
 			log.Fatalf("Failed to add task to cron: %v", err)
 		}

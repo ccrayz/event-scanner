@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"sync"
 	"time"
 
 	"ccrayz/event-scanner/internal/indexer/models"
@@ -46,23 +47,55 @@ func (t GetNodeInfo) Do(appDB *db.AppDB) {
 	if err != nil {
 		log.Fatalf("Failed to send request: %v", err)
 	}
+	collectedAt := time.Now().UTC().Format("2006-01-02 15:04:05")
 
 	var peerDump p2p.PeerDump
 	_ = json.Unmarshal(data.Result, &peerDump)
 
-	collectedAt := time.Now().UTC().Format("2006-01-02 15:04:05")
-	log.Printf("collected time [%s] total peers [%d]", collectedAt, peerDump.TotalConnected)
-
-	peerHistory := models.PeerHistory{
-		CollectedAt: datatypes.JSON(collectedAt),
-		PeerIDs:     getPeerIDs(peerDump.Peers),
-		NodeIDs:     getNodeIDs(peerDump.Peers),
-		Addresses:   getAddresses(peerDump.Peers),
-	}
-
+	peerHistory := createPeerHistory(peerDump, collectedAt)
 	if err := appDB.DB.Create(&peerHistory).Error; err != nil {
 		log.Fatalf("Failed to save peer history: %v", err)
 	}
+}
+
+func createPeerHistory(peerDump p2p.PeerDump, collectedAt string) models.PeerHistory {
+	var wg sync.WaitGroup
+	peerIDsChan := make(chan datatypes.JSON)
+	nodeIDsChan := make(chan datatypes.JSON)
+	addressesChan := make(chan datatypes.JSON)
+
+	wg.Add(3)
+
+	go func() {
+		defer wg.Done()
+		peerIDsChan <- getPeerIDs(peerDump.Peers)
+	}()
+
+	go func() {
+		defer wg.Done()
+		nodeIDsChan <- getNodeIDs(peerDump.Peers)
+	}()
+
+	go func() {
+		defer wg.Done()
+		addressesChan <- getAddresses(peerDump.Peers)
+	}()
+
+	go func() {
+		wg.Wait()
+		close(peerIDsChan)
+		close(nodeIDsChan)
+		close(addressesChan)
+	}()
+
+	peerHistory := models.PeerHistory{
+		CollectedAt: datatypes.JSON(collectedAt),
+		PeerIDs:     <-peerIDsChan,
+		NodeIDs:     <-nodeIDsChan,
+		Addresses:   <-addressesChan,
+	}
+	log.Printf("collected time [%s] total peers [%d]", collectedAt, peerDump.TotalConnected)
+	return peerHistory
 }
 
 func getPeerIDs(peers map[string]*p2p.PeerInfo) datatypes.JSON {
